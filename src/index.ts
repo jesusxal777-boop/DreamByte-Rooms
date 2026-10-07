@@ -6,6 +6,7 @@ import {
   Partials,
   Message,
   ChatInputCommandInteraction,
+  TextChannel,
 } from 'discord.js';
 import { initProviders, getConfiguredProviderIds } from './providers/index.js';
 import { roomManager } from './rooms/roomManager.js';
@@ -59,9 +60,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 });
 
 client.on(Events.MessageCreate, async (message: Message) => {
-  // Ignore bots (including ourselves) to avoid loops
   if (message.author.bot) return;
-  // Ignore empty messages
   if (!message.content?.trim()) return;
 
   try {
@@ -106,15 +105,16 @@ async function handleHumanMessage(message: Message): Promise<void> {
   const ordered = [...decision.agents].sort((a, b) => a.priority - b.priority);
   const agentIds = ordered.map((d) => d.id);
 
-  // Typing indicator (only if the channel supports it)
+  // Typing indicator
   if (message.channel.isTextBased() && 'sendTyping' in message.channel) {
     await message.channel.sendTyping().catch(() => {});
   }
 
   const replies = await executeAgents(agentIds, updatedRoom, convMsg);
 
-  // Only send if the channel can receive messages
-  if (!message.channel.isSendable()) {
+  // Safe channel for sending messages
+  const channel = message.channel as TextChannel;
+  if (!channel || typeof channel.send !== 'function') {
     console.warn('[Message] Channel is not sendable');
     return;
   }
@@ -124,7 +124,7 @@ async function handleHumanMessage(message: Message): Promise<void> {
     const chunks = splitMessage(formatted);
 
     for (const chunk of chunks) {
-      const sent = await message.channel.send({ content: chunk });
+      const sent = await channel.send({ content: chunk });
       await roomManager.addMessage(
         channelId,
         {
