@@ -16,9 +16,18 @@ import { getEnabledAgents } from './agents/defaultAgents.js';
 import { toConversationMessage, splitMessage, formatAgentReply } from './utils/discordHelpers.js';
 import { handleContextCommand } from './commands/context.js';
 
+// Debug: show which relevant env vars are present (without revealing values)
+const relevantKeys = Object.keys(process.env).filter(k =>
+  k.includes('DISCORD') || k.includes('OPENAI') || k.includes('TOKEN') || k.includes('API')
+);
+console.log('[Boot] Relevant env keys found:', relevantKeys.length > 0 ? relevantKeys.join(', ') : '(none)');
+console.log('[Boot] DISCORD_TOKEN present?', !!process.env.DISCORD_TOKEN);
+console.log('[Boot] DISCORD_TOKEN length:', process.env.DISCORD_TOKEN?.length ?? 0);
+
 const token = process.env.DISCORD_TOKEN;
 if (!token) {
   console.error('DISCORD_TOKEN is required. Copy .env.example to .env and fill it.');
+  console.error('Make sure the variable is set in the SERVICE Variables tab (not only Project level).');
   process.exit(1);
 }
 
@@ -105,14 +114,12 @@ async function handleHumanMessage(message: Message): Promise<void> {
   const ordered = [...decision.agents].sort((a, b) => a.priority - b.priority);
   const agentIds = ordered.map((d) => d.id);
 
-  // Typing indicator
   if (message.channel.isTextBased() && 'sendTyping' in message.channel) {
     await message.channel.sendTyping().catch(() => {});
   }
 
   const replies = await executeAgents(agentIds, updatedRoom, convMsg);
 
-  // Safe channel for sending messages
   const channel = message.channel as TextChannel;
   if (!channel || typeof channel.send !== 'function') {
     console.warn('[Message] Channel is not sendable');
