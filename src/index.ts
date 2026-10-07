@@ -13,7 +13,7 @@ import { routeAgents } from './router/agentRouter.js';
 import { executeAgents } from './agents/agentExecutor.js';
 import { getEnabledAgents } from './agents/defaultAgents.js';
 import { toConversationMessage, splitMessage, formatAgentReply } from './utils/discordHelpers.js';
-import { handleContextCommand, contextCommand } from './commands/context.js';
+import { handleContextCommand } from './commands/context.js';
 
 const token = process.env.DISCORD_TOKEN;
 if (!token) {
@@ -106,11 +106,18 @@ async function handleHumanMessage(message: Message): Promise<void> {
   const ordered = [...decision.agents].sort((a, b) => a.priority - b.priority);
   const agentIds = ordered.map((d) => d.id);
 
+  // Typing indicator (only if the channel supports it)
   if (message.channel.isTextBased() && 'sendTyping' in message.channel) {
     await message.channel.sendTyping().catch(() => {});
   }
 
   const replies = await executeAgents(agentIds, updatedRoom, convMsg);
+
+  // Only send if the channel can receive messages
+  if (!message.channel.isSendable()) {
+    console.warn('[Message] Channel is not sendable');
+    return;
+  }
 
   for (const reply of replies) {
     const formatted = formatAgentReply(reply.displayName, reply.content);
